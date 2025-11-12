@@ -1,213 +1,226 @@
 // lib/store/combatStore.ts
 import { create } from 'zustand';
-import { Monster } from '@/lib/game/entities/Monster';
+
+interface Stats {
+  hp: number;
+  maxHp: number;
+  mp: number;
+  maxMp: number;
+  level: number;
+  attack: number;
+  defense: number;
+  speed: number;
+  name: string;
+}
+
+interface Enemy {
+  id: string;
+  stats: Stats;
+}
 
 interface CombatState {
-  // État du combat
   isInCombat: boolean;
-  currentEnemy: Monster | null;
+  currentEnemy: Enemy | null;
   playerTurn: boolean;
   combatLog: string[];
-  isDefending: boolean;
-  
-  // Stats joueur
-  playerStats: {
-    hp: number;
-    maxHp: number;
-    mp: number;
-    maxMp: number;
-    attack: number;
-    defense: number;
-    level: number;
-  };
+  playerStats: Stats;
   
   // Actions
-  startCombat: (enemy: Monster) => void;
-  endCombat: () => void;
+  startCombat: (enemy: Enemy) => void;
+  endCombat: (victory: boolean) => void;
+  checkCombatEnd: () => boolean;
   playerAttack: () => void;
   playerDefend: () => void;
-  playerFlee: () => boolean;
+  playerFlee: () => void;
   enemyTurn: () => void;
   addLog: (message: string) => void;
-  damagePlayer: (damage: number) => void;
-  damageEnemy: (damage: number) => void;
 }
 
 export const useCombatStore = create<CombatState>((set, get) => ({
-  // État initial
   isInCombat: false,
   currentEnemy: null,
   playerTurn: true,
   combatLog: [],
-  isDefending: false,
-  
   playerStats: {
+    name: 'Hauskiel',
     hp: 100,
     maxHp: 100,
     mp: 50,
     maxMp: 50,
-    attack: 15,
-    defense: 10,
     level: 1,
+    attack: 15,      // ⚔️ Dégâts de base
+    defense: 8,      // 🛡️ Défense de base
+    speed: 100,      // ⚡ Vitesse (pour l'ordre des tours)
   },
-  
-  // Démarrer combat
-  startCombat: (enemy) => {
+
+  addLog: (message: string) => {
+    set((state) => ({
+      combatLog: [...state.combatLog.slice(-9), message], // Garde les 10 derniers messages
+    }));
+  },
+
+  startCombat: (enemy: Enemy) => {
+    console.log('⚔️ Combat démarré contre', enemy.stats.name);
     set({
       isInCombat: true,
       currentEnemy: enemy,
       playerTurn: true,
-      combatLog: [`⚔️ Combat contre ${enemy.stats.name} !`],
-      isDefending: false,
+      combatLog: [`Combat contre ${enemy.stats.name} !`],
     });
   },
-  
-  // Terminer combat
-  endCombat: () => {
-    set({
-      isInCombat: false,
-      currentEnemy: null,
-      playerTurn: true,
-      combatLog: [],
-      isDefending: false,
-    });
-  },
-  
-  // Attaque joueur
-  playerAttack: () => {
-    const state = get();
-    if (!state.currentEnemy || !state.playerTurn) return;
+
+  endCombat: (victory: boolean) => {
+    const { addLog } = get();
     
-    // Calcul dégâts
-    const baseDamage = state.playerStats.attack;
-    const variance = 0.8 + Math.random() * 0.4; // ±20%
-    const isCritical = Math.random() < 0.15; // 15% crit
-    const damage = Math.floor(baseDamage * variance * (isCritical ? 2 : 1));
-    
-    // Appliquer dégâts
-    get().damageEnemy(damage);
-    
-    // Log
-    const critText = isCritical ? ' CRITIQUE !' : '';
-    get().addLog(`💥 Vous attaquez pour ${damage} dégâts${critText}`);
-    
-    // Check si monstre mort
-    if (state.currentEnemy.stats.hp <= 0) {
-      get().addLog(`✅ ${state.currentEnemy.stats.name} est vaincu !`);
-      setTimeout(() => {
-        get().endCombat();
-      }, 2000);
-      return;
-    }
-    
-    // Tour de l'ennemi
-    set({ playerTurn: false });
-    setTimeout(() => {
-      get().enemyTurn();
-    }, 1500);
-  },
-  
-  // Défense joueur
-  playerDefend: () => {
-    const state = get();
-    if (!state.playerTurn) return;
-    
-    set({ isDefending: true });
-    get().addLog('🛡️ Vous vous mettez en défense...');
-    
-    // Tour de l'ennemi
-    set({ playerTurn: false });
-    setTimeout(() => {
-      get().enemyTurn();
-    }, 1500);
-  },
-  
-  // Fuite
-  playerFlee: () => {
-    const fleeChance = 0.5; // 50% de chance
-    const success = Math.random() < fleeChance;
-    
-    if (success) {
-      get().addLog('🏃 Vous avez fui le combat !');
-      setTimeout(() => {
-        get().endCombat();
-      }, 1500);
-      return true;
+    if (victory) {
+      addLog('🎉 Victoire !');
+      console.log('✅ Victoire !');
+      
+      // TODO: Récompenses (XP, loot, etc.)
     } else {
-      get().addLog('❌ Impossible de fuir !');
+      addLog('💀 Défaite...');
+      console.log('❌ Défaite');
+    }
+
+    // Réinitialiser l'état de combat après 2 secondes
+    setTimeout(() => {
+      set({
+        isInCombat: false,
+        currentEnemy: null,
+        playerTurn: true,
+        combatLog: [],
+      });
+    }, 2000);
+  },
+
+  // Vérifier si le combat doit se terminer
+  checkCombatEnd: () => {
+    const { playerStats, currentEnemy, endCombat } = get();
+
+    // CRITIQUE : Vérifier la mort de l'ennemi
+    if (currentEnemy && currentEnemy.stats.hp <= 0) {
+      console.log('💀 Ennemi vaincu !');
+      endCombat(true);
+      return true;
+    }
+
+    // Vérifier la mort du joueur
+    if (playerStats.hp <= 0) {
+      console.log('💀 Joueur vaincu !');
+      endCombat(false);
+      return true;
+    }
+
+    return false;
+  },
+
+  playerAttack: () => {
+    const { playerStats, currentEnemy, playerTurn, addLog, checkCombatEnd, enemyTurn } = get();
+    
+    if (!playerTurn || !currentEnemy) return;
+
+    console.log('⚔️ Attaque du joueur');
+    
+    // Calculer les dégâts
+    const baseDamage = playerStats.attack;
+    const damageVariation = Math.floor(Math.random() * 5) - 2; // -2 à +2
+    const totalDamage = Math.max(1, baseDamage + damageVariation - Math.floor(currentEnemy.stats.defense / 2));
+
+    // Appliquer les dégâts
+    const newEnemyHp = Math.max(0, currentEnemy.stats.hp - totalDamage);
+    
+    set((state) => ({
+      currentEnemy: state.currentEnemy ? {
+        ...state.currentEnemy,
+        stats: {
+          ...state.currentEnemy.stats,
+          hp: newEnemyHp,
+        },
+      } : null,
+      playerTurn: false,
+    }));
+
+    addLog(`Vous infligez ${totalDamage} dégâts !`);
+
+    // CRITIQUE : Vérifier si l'ennemi est mort APRÈS avoir mis à jour son HP
+    setTimeout(() => {
+      if (!checkCombatEnd()) {
+        // Si le combat continue, tour de l'ennemi
+        enemyTurn();
+      }
+    }, 500);
+  },
+
+  playerDefend: () => {
+    const { playerTurn, addLog, enemyTurn, checkCombatEnd } = get();
+    
+    if (!playerTurn) return;
+
+    console.log('🛡️ Défense du joueur');
+    
+    set({ playerTurn: false });
+    addLog('Vous vous préparez à défendre !');
+
+    // TODO: Ajouter un buff de défense temporaire
+    
+    setTimeout(() => {
+      if (!checkCombatEnd()) {
+        enemyTurn();
+      }
+    }, 500);
+  },
+
+  playerFlee: () => {
+    const { playerTurn, addLog, endCombat } = get();
+    
+    if (!playerTurn) return;
+
+    console.log('🏃 Tentative de fuite');
+    
+    // 50% de chance de réussir
+    const fleeSuccess = Math.random() > 0.5;
+
+    if (fleeSuccess) {
+      addLog('Vous prenez la fuite !');
+      endCombat(false);
+    } else {
+      addLog('La fuite a échoué !');
       set({ playerTurn: false });
+      
       setTimeout(() => {
         get().enemyTurn();
-      }, 1500);
-      return false;
+      }, 500);
     }
   },
-  
-  // Tour ennemi
+
   enemyTurn: () => {
-    const state = get();
-    if (!state.currentEnemy) return;
+    const { currentEnemy, playerStats, addLog, checkCombatEnd } = get();
     
-    // Calcul dégâts ennemi
-    const baseDamage = 10 + state.currentEnemy.stats.level * 2;
-    const variance = 0.8 + Math.random() * 0.4;
-    let damage = Math.floor(baseDamage * variance);
+    if (!currentEnemy) return;
+
+    console.log('👹 Tour de l\'ennemi');
     
-    // Si le joueur défend, réduit dégâts
-    if (state.isDefending) {
-      damage = Math.floor(damage * 0.5);
-      get().addLog(`🛡️ Défense ! Dégâts réduits de 50%`);
-    }
+    // Calculer les dégâts de l'ennemi
+    const baseDamage = currentEnemy.stats.attack;
+    const damageVariation = Math.floor(Math.random() * 5) - 2;
+    const totalDamage = Math.max(1, baseDamage + damageVariation - Math.floor(playerStats.defense / 2));
+
+    // Appliquer les dégâts au joueur
+    const newPlayerHp = Math.max(0, playerStats.hp - totalDamage);
     
-    // Appliquer dégâts au joueur
-    get().damagePlayer(damage);
-    get().addLog(`👹 ${state.currentEnemy.stats.name} attaque pour ${damage} dégâts`);
-    
-    // Check si joueur mort
-    if (state.playerStats.hp <= 0) {
-      get().addLog('💀 Vous êtes vaincu...');
-      setTimeout(() => {
-        // Reset HP et fin combat
-        set((s) => ({
-          playerStats: { ...s.playerStats, hp: s.playerStats.maxHp },
-        }));
-        get().endCombat();
-      }, 2000);
-      return;
-    }
-    
-    // Retour au tour du joueur
-    set({ playerTurn: true, isDefending: false });
-  },
-  
-  // Ajouter log
-  addLog: (message) => {
-    set((state) => ({
-      combatLog: [...state.combatLog.slice(-4), message], // Garder 5 messages max
-    }));
-  },
-  
-  // Infliger dégâts au joueur
-  damagePlayer: (damage) => {
     set((state) => ({
       playerStats: {
         ...state.playerStats,
-        hp: Math.max(0, state.playerStats.hp - damage),
+        hp: newPlayerHp,
       },
+      playerTurn: true,
     }));
-  },
-  
-  // Infliger dégâts à l'ennemi
-  damageEnemy: (damage) => {
-    set((state) => {
-      if (!state.currentEnemy) return state;
-      
-      state.currentEnemy.stats.hp = Math.max(
-        0,
-        state.currentEnemy.stats.hp - damage
-      );
-      
-      return { currentEnemy: state.currentEnemy };
-    });
+
+    addLog(`${currentEnemy.stats.name} vous inflige ${totalDamage} dégâts !`);
+
+    // Vérifier si le joueur est mort
+    setTimeout(() => {
+      checkCombatEnd();
+    }, 500);
   },
 }));

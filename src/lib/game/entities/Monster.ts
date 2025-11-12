@@ -1,19 +1,24 @@
 // lib/game/entities/Monster.ts
-import * as THREE from 'three';
+import * as THREE from "three";
 
 export class Monster {
   public mesh: THREE.Mesh;
   public id: string;
   public stats: {
-    name: string;
     hp: number;
     maxHp: number;
+    mp: number;
+    maxMp: number;
     level: number;
+    attack: number;
+    defense: number;
+    speed: number;
+    name: string;
   };
 
   constructor(scene: THREE.Scene, position: THREE.Vector3) {
     this.id = Math.random().toString(36);
-    
+
     // Cube bleu pour l'instant
     const geometry = new THREE.BoxGeometry(1, 1.5, 1);
     const material = new THREE.MeshStandardMaterial({ color: 0x0000ff });
@@ -23,10 +28,15 @@ export class Monster {
     scene.add(this.mesh);
 
     this.stats = {
-      name: 'Slime Corrompu',
-      hp: 50,
-      maxHp: 50,
+      name: "Slime Corrompu",
+      hp: 30,
+      maxHp: 30,
+      mp: 0,
+      maxMp: 0,
       level: 1,
+      attack: 5, // ⚔️ IMPORTANT : Définis l'attaque
+      defense: 2, // 🛡️ IMPORTANT : Définis la défense
+      speed: 80,
     };
   }
 
